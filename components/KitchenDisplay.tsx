@@ -19,7 +19,7 @@ import {
   type ActiveOrderStatus,
   type Order,
 } from '@/lib/kds/helpers'
-import { playNewOrderChime } from '@/lib/kds/sound'
+import { announceNewOrder } from '@/lib/kds/sound'
 import { advanceOrderStatus } from '@/app/actions/order'
 
 type KitchenDisplayProps = {
@@ -61,6 +61,7 @@ export function KitchenDisplay({
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [soundEnabled, setSoundEnabled] = useState(true)
+  const [newOrderAlerts, setNewOrderAlerts] = useState<Order[]>([])
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [clock, setClock] = useState(() => new Date())
   const knownPendingRef = useRef<Set<string>>(new Set())
@@ -128,7 +129,8 @@ export function KitchenDisplay({
           })
           if (order.status === 'pending' && !knownPendingRef.current.has(order.id)) {
             knownPendingRef.current.add(order.id)
-            if (soundEnabled) playNewOrderChime()
+            setNewOrderAlerts((prev) => [...prev, order])
+            if (soundEnabled) announceNewOrder()
           }
         }
       )
@@ -281,12 +283,12 @@ export function KitchenDisplay({
             <button
               type="button"
               onClick={() => {
-                if (soundEnabled) playNewOrderChime()
+                announceNewOrder()
               }}
               className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
                 isKitchen ? 'bg-slate-800 hover:bg-slate-700' : 'bg-gray-100 hover:bg-gray-200'
               }`}
-              title="Test notification sound"
+              title="Test notification sound and speech; tap once to allow browser audio"
             >
               <Volume2 className="h-4 w-4" />
               Test
@@ -356,6 +358,43 @@ export function KitchenDisplay({
           </div>
         )}
       </main>
+      {newOrderAlerts[0] && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="new-order-title"
+            className="w-full max-w-lg rounded-2xl border-4 border-amber-400 bg-slate-900 p-6 text-white shadow-2xl"
+          >
+            <div className="mb-4 flex items-center gap-3 text-amber-400">
+              <Bell className="h-9 w-9 animate-bounce" />
+              <h2 id="new-order-title" className="text-3xl font-extrabold">
+                New order has arrived!
+              </h2>
+            </div>
+            <p className="mb-2 text-xl font-bold">
+              Table {newOrderAlerts[0].table_id} · #{newOrderAlerts[0].id.slice(0, 8).toUpperCase()}
+            </p>
+            <ul className="mb-6 max-h-64 space-y-2 overflow-y-auto text-lg">
+              {newOrderAlerts[0].items.map((item, index) => (
+                <li key={`${item.id}-${index}`}>
+                  {item.quantity}× {item.name_en}
+                  {item.notes && <span className="block text-sm text-amber-300">Note: {item.notes}</span>}
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              autoFocus
+              onClick={() => setNewOrderAlerts((prev) => prev.slice(1))}
+              className="w-full rounded-xl bg-amber-400 px-5 py-4 text-lg font-bold text-slate-950 hover:bg-amber-300"
+            >
+              Acknowledge order
+              {newOrderAlerts.length > 1 && ` (${newOrderAlerts.length - 1} more)`}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
